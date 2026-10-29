@@ -1,0 +1,52 @@
+name: Build Lite Version (Framework-Dependent)
+
+on:
+  workflow_dispatch: # 允许手动触发
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  build-windows-lite:
+    name: Windows x64 Lite
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json # 自动读取仓库要求的 .NET 版本
+
+      - name: Read Version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw version.txt).Trim()
+          "content=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build Lite Publish (No Self-Contained, No FFmpeg)
+        shell: pwsh
+        run: |
+          # 核心修改：
+          # 1. 移除 --self-contained，改为显式声明 -p:SelfContained=false
+          # 2. 不执行原有的 script/ffmpeg.ps1 脚本，因此不会下载和打包 FFmpeg
+          dotnet publish ./DownKyi/DownKyi.csproj `
+            -c Release `
+            -r win-x64 `
+            -p:SelfContained=false `
+            -p:PublishSingleFile=false `
+            -p:Version=${{ steps.version.outputs.content }} `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o ./artifacts/publish/win-x64-lite
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DownKyi-Lite-win-x64
+          path: ./artifacts/publish/win-x64-lite
+          retention-days: 7
